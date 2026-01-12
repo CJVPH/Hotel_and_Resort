@@ -37,11 +37,7 @@ CREATE INDEX idx_status ON reservations(status);
 -- Add is_admin column to users table if it doesn't exist
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin TINYINT(1) DEFAULT 0;
 
--- Insert default admin account
--- Username: admin
--- Email: admin@paradisehotel.com
--- Password: admin123 (hashed)
--- Full Name: Administrator
+
 INSERT INTO users (username, email, password, full_name, is_admin) 
 VALUES ('admin', 'admin@paradisehotel.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Administrator', 1)
 ON DUPLICATE KEY UPDATE username=username;
