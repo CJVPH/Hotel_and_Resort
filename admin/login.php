@@ -1,67 +1,56 @@
 <?php
 require_once '../config/database.php';
-session_start();
+require_once '../config/auth.php';
+
+// If already logged in as admin, redirect to dashboard
+if (isAdminLoggedIn()) {
+    header('Location: index.php');
+    exit();
+}
 
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $username = trim($_POST['username']);
-    $password = $_POST['password'];
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $username = trim($_POST['username'] ?? '');
+    $password = $_POST['password'] ?? '';
     
     if (empty($username) || empty($password)) {
-        $error = 'Please enter both username and password!';
+        $error = 'Please enter both username and password';
     } else {
-        $conn = getDBConnection();
-        
-        // Check if user exists and is admin
-        $stmt = $conn->prepare("SELECT id, username, password, full_name, is_admin FROM users WHERE username = ? OR email = ?");
-        $stmt->bind_param("ss", $username, $username);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($result->num_rows == 1) {
-            $user = $result->fetch_assoc();
+        try {
+            $conn = getDBConnection();
+            $stmt = $conn->prepare("SELECT id, username, password, full_name, email FROM users WHERE username = ? AND is_admin = 1");
+            $stmt->bind_param("s", $username);
+            $stmt->execute();
+            $result = $stmt->get_result();
             
-            if (password_verify($password, $user['password'])) {
-                // Check if user is admin - be more flexible with different data types
-                $isAdmin = ($user['is_admin'] == 1 || $user['is_admin'] === '1' || $user['is_admin'] === true || $user['is_admin'] == 'true');
+            if ($result->num_rows === 1) {
+                $admin = $result->fetch_assoc();
                 
-                if ($isAdmin) {
-                    $_SESSION['admin_id'] = $user['id'];
-                    $_SESSION['admin_username'] = $user['username'];
-                    $_SESSION['admin_full_name'] = $user['full_name'];
+                if (password_verify($password, $admin['password'])) {
+                    // Login successful
+                    loginAdmin($admin);
                     
-                    // Verify session was set
-                    if (isset($_SESSION['admin_id'])) {
-                        header('Location: index.php');
-                        exit();
-                    } else {
-                        $error = 'Session error! Please try again.';
-                    }
-                } else {
-                    // Auto-fix: if password is correct but not admin, make them admin
-                    $updateStmt = $conn->prepare("UPDATE users SET is_admin = 1 WHERE id = ?");
-                    $updateStmt->bind_param("i", $user['id']);
-                    $updateStmt->execute();
-                    $updateStmt->close();
+                    // Redirect to intended page or dashboard
+                    $redirectTo = $_SESSION['redirect_after_login'] ?? 'index.php';
+                    unset($_SESSION['redirect_after_login']);
                     
-                    // Try login again
-                    $_SESSION['admin_id'] = $user['id'];
-                    $_SESSION['admin_username'] = $user['username'];
-                    $_SESSION['admin_full_name'] = $user['full_name'];
-                    
-                    header('Location: index.php');
+                    header('Location: ' . $redirectTo);
                     exit();
+                } else {
+                    $error = 'Invalid username or password';
                 }
             } else {
-                $error = 'Invalid password! Please check your password.';
+                $error = 'Invalid username or password';
             }
-        } else {
-            $error = 'User not found! Please check your username/email.';
+            
+            $stmt->close();
+            $conn->close();
+            
+        } catch (Exception $e) {
+            error_log("Admin login error: " . $e->getMessage());
+            $error = 'Login failed. Please try again.';
         }
-        
-        $stmt->close();
-        $conn->close();
     }
 }
 ?>
@@ -71,90 +60,221 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Login - Paradise Hotel & Resort</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/main.css">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+    body {
+        background: linear-gradient(135deg, #2C3E50 0%, #34495E 100%);
+        background-attachment: fixed;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Montserrat', sans-serif;
+        padding: 2rem;
+    }
+
+    .admin-login-container {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(15px);
+        border-radius: 25px;
+        padding: 3.5rem;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        width: 100%;
+        max-width: 480px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .admin-login-container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5px;
+        background: linear-gradient(135deg, #C9A961 0%, #8B7355 100%);
+    }
+
+    .login-header {
+        text-align: center;
+        margin-bottom: 2.5rem;
+    }
+
+    .login-header h1 {
+        color: #2C3E50;
+        font-size: 2.2rem;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+    }
+
+    .login-header h1 i {
+        background: linear-gradient(135deg, #C9A961 0%, #8B7355 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    .login-header p {
+        color: #666;
+        font-size: 1.1rem;
+        font-weight: 500;
+    }
+
+    .form-group {
+        margin-bottom: 2rem;
+    }
+
+    .form-group label {
+        display: block;
+        color: #2C3E50;
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+        font-size: 1rem;
+    }
+
+    .form-group input {
+        width: 100%;
+        padding: 1.25rem;
+        border: 2px solid rgba(201, 169, 97, 0.2);
+        border-radius: 15px;
+        font-size: 1rem;
+        transition: all 0.3s ease;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(5px);
+        font-family: 'Montserrat', sans-serif;
+    }
+
+    .form-group input:focus {
+        outline: none;
+        border-color: #C9A961;
+        box-shadow: 0 0 0 4px rgba(201, 169, 97, 0.1);
+        background: white;
+    }
+
+    .btn-login {
+        width: 100%;
+        background: linear-gradient(135deg, #C9A961 0%, #8B7355 100%);
+        color: white;
+        border: none;
+        padding: 1.25rem;
+        border-radius: 15px;
+        font-size: 1.1rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 8px 20px rgba(201, 169, 97, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+
+    .btn-login:hover {
+        background: linear-gradient(135deg, #8B7355 0%, #C9A961 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 12px 25px rgba(201, 169, 97, 0.4);
+    }
+
+    .error-message {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+        padding: 1rem;
+        border-radius: 10px;
+        margin-bottom: 1.5rem;
+        text-align: center;
+        font-weight: 600;
+        box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
+    }
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        box-shadow: 0 5px 15px rgba(201, 169, 97, 0.3);
+    }
+
+    .btn-login:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(201, 169, 97, 0.4);
+    }
+
+    .error-message {
+        background: #fee;
+        color: #c33;
+        border: 1px solid #fcc;
+        padding: 1rem;
+        border-radius: 10px;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .back-link {
+        text-align: center;
+        margin-top: 2rem;
+    }
+
+    .back-link a {
+        color: #666;
+        text-decoration: none;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.3s ease;
+    }
+
+    .back-link a:hover {
+        color: #C9A961;
+    }
+
+    @media (max-width: 480px) {
         .admin-login-container {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            margin: 1rem;
             padding: 2rem;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
-        .admin-login-card {
-            background: white;
-            padding: 3rem;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            width: 100%;
-            max-width: 450px;
-        }
-        .admin-login-header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        .admin-login-header h1 {
-            font-size: 2rem;
-            color: #667eea;
-            margin-bottom: 0.5rem;
-        }
-        .admin-login-header h1 i {
-            margin-right: 0.5rem;
-        }
-        .admin-login-header p {
-            color: #666;
-            font-size: 0.95rem;
-        }
-        .admin-badge {
-            display: inline-block;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            margin-top: 0.5rem;
-        }
+    }
     </style>
 </head>
 <body>
     <div class="admin-login-container">
-        <div class="admin-login-card">
-            <div class="admin-login-header">
-                <h1><i class="fas fa-shield-alt"></i> Admin Login</h1>
-                <p>Paradise Hotel & Resort</p>
-                <span class="admin-badge">Administrator Access Only</span>
-            </div>
-
-            <?php if ($error): ?>
-                <div class="alert alert-error">
-                    <i class="fas fa-exclamation-circle"></i> <?php echo $error; ?>
-                </div>
-            <?php endif; ?>
-
-            <form method="POST" action="" class="auth-form">
-                <div class="form-group">
-                    <label><i class="fas fa-user"></i> Username or Email</label>
-                    <input type="text" name="username" placeholder="Enter your admin username or email" required autofocus>
-                </div>
-
-                <div class="form-group">
-                    <label><i class="fas fa-lock"></i> Password</label>
-                    <input type="password" name="password" placeholder="Enter your password" required>
-                </div>
-
-                <button type="submit" class="btn-primary">
-                    <i class="fas fa-sign-in-alt"></i> Login to Admin Panel
-                </button>
-            </form>
-
-            <div class="auth-footer">
-                <p><a href="../index.php"><i class="fas fa-arrow-left"></i> Back to Main Website</a></p>
-            </div>
+        <div class="login-header">
+            <h1><i class="fas fa-shield-alt"></i> Admin Login</h1>
+            <p>Paradise Hotel & Resort Administration</p>
         </div>
+
+        <?php if (!empty($error)): ?>
+            <div class="error-message">
+                <i class="fas fa-exclamation-circle"></i>
+                <?php echo htmlspecialchars($error); ?>
+            </div>
+        <?php endif; ?>
+
+        <form method="POST" action="">
+            <div class="form-group">
+                <label for="username"><i class="fas fa-user"></i> Username</label>
+                <input type="text" id="username" name="username" required 
+                       value="<?php echo htmlspecialchars($_POST['username'] ?? ''); ?>"
+                       placeholder="Enter your admin username">
+            </div>
+
+            <div class="form-group">
+                <label for="password"><i class="fas fa-lock"></i> Password</label>
+                <input type="password" id="password" name="password" required 
+                       placeholder="Enter your password">
+            </div>
+
+            <button type="submit" class="btn-login">
+                <i class="fas fa-sign-in-alt"></i> Login to Admin Panel
+            </button>
+        </form>
     </div>
 </body>
 </html>
-

@@ -1,203 +1,410 @@
 <?php
-require_once 'auth.php';
 require_once '../config/database.php';
+require_once '../config/auth.php';
 
-$conn = getDBConnection();
-$message = '';
-$messageType = '';
-// Handle create admin submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_admin'])) {
-    $username = trim($_POST['username'] ?? '');
-    $email = trim($_POST['email'] ?? '');
-    $full_name = trim($_POST['full_name'] ?? '');
-    $password = $_POST['password'] ?? '';
-    $confirm = $_POST['confirm'] ?? '';
+// Require admin login
+requireAdminLogin();
 
-    if ($username === '' || $email === '' || $full_name === '' || $password === '') {
-        $message = 'Please fill out all required fields.';
-        $messageType = 'error';
-    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $message = 'Please provide a valid email address.';
-        $messageType = 'error';
-    } elseif (strlen($password) < 6) {
-        $message = 'Password must be at least 6 characters.';
-        $messageType = 'error';
-    } elseif ($password !== $confirm) {
-        $message = 'Passwords do not match.';
-        $messageType = 'error';
+// Get users with pagination
+$page = intval($_GET['page'] ?? 1);
+$limit = 20;
+$offset = ($page - 1) * $limit;
+
+$searchTerm = $_GET['search'] ?? '';
+
+try {
+    $conn = getDBConnection();
+    
+    // Build query
+    $whereClause = '';
+    $params = [];
+    $types = '';
+    
+    if (!empty($searchTerm)) {
+        $whereClause = "WHERE (username LIKE ? OR email LIKE ? OR full_name LIKE ?) AND is_admin = 0";
+        $searchParam = "%{$searchTerm}%";
+        $params = [$searchParam, $searchParam, $searchParam];
+        $types = 'sss';
     } else {
-        // Check uniqueness
-        $chk = $conn->prepare("SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1");
-        $chk->bind_param('ss', $username, $email);
-        $chk->execute();
-        $res = $chk->get_result();
-        if ($res && $res->num_rows > 0) {
-            $message = 'A user with that username or email already exists.';
-            $messageType = 'error';
-            $chk->close();
-        } else {
-            $chk->close();
-            $hashed = password_hash($password, PASSWORD_DEFAULT);
-            $is_admin = 1;
-            $ins = $conn->prepare("INSERT INTO users (username, email, password, full_name, is_admin) VALUES (?, ?, ?, ?, ?)");
-            $ins->bind_param('ssssi', $username, $email, $hashed, $full_name, $is_admin);
-            if ($ins->execute()) {
-                $message = 'Admin account created successfully.';
-                $messageType = 'success';
-            } else {
-                $message = 'Error creating admin: ' . $conn->error;
-                $messageType = 'error';
-            }
-            $ins->close();
-        }
+        $whereClause = "WHERE is_admin = 0";
     }
+    
+    // Get total count
+    $countSql = "SELECT COUNT(*) as total FROM users {$whereClause}";
+    $countStmt = $conn->prepare($countSql);
+    if (!empty($params)) {
+        $countStmt->bind_param($types, ...$params);
+    }
+    $countStmt->execute();
+    $totalResult = $countStmt->get_result();
+    $totalUsers = $totalResult->fetch_assoc()['total'];
+    $countStmt->close();
+    
+    // Get users
+    $sql = "SELECT id, username, email, full_name, created_at FROM users 
+            {$whereClause} 
+            ORDER BY created_at DESC 
+            LIMIT ? OFFSET ?";
+    
+    $stmt = $conn->prepare($sql);
+    $params[] = $limit;
+    $params[] = $offset;
+    $types .= 'ii';
+    
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $users = [];
+    
+    while ($row = $result->fetch_assoc()) {
+        // Get reservation count for each user
+        $reservationStmt = $conn->prepare("SELECT COUNT(*) as count FROM reservations WHERE user_id = ?");
+        $reservationStmt->bind_param("i", $row['id']);
+        $reservationStmt->execute();
+        $reservationResult = $reservationStmt->get_result();
+        $row['reservation_count'] = $reservationResult->fetch_assoc()['count'];
+        $reservationStmt->close();
+        
+        $users[] = $row;
+    }
+    
+    $stmt->close();
+    $conn->close();
+    
+    $totalPages = ceil($totalUsers / $limit);
+    
+} catch (Exception $e) {
+    error_log("Users page error: " . $e->getMessage());
+    $users = [];
+    $totalUsers = 0;
+    $totalPages = 0;
+}
+// Set page variables for template
+$pageTitle = 'Users';
+$currentPage = 'users';
+?>
+<?php include 'template_header.php'; ?>
+
+<!-- Page specific styles -->
+<style>
+.search-bar {
+    background: white;
+    padding: 2rem;
+    border-radius: 15px;
+    margin-bottom: 2rem;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    display: flex;
+    gap: 1rem;
+    align-items: end;
 }
 
-// Note: deletions are handled by admin/delete_user.php via POST
+.search-group {
+    flex: 1;
+}
 
-// Get all users with reservation count
-$sql = "SELECT u.*, COUNT(r.id) as reservation_count FROM users u LEFT JOIN reservations r ON u.id = r.user_id GROUP BY u.id ORDER BY u.created_at DESC";
-$result = $conn->query($sql);
-$users = $result->fetch_all(MYSQLI_ASSOC);
+.search-group label {
+    display: block;
+    color: #2C3E50;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
 
-$conn->close();
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Users - Admin</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        .admin-container { max-width: 1400px; margin: 2rem auto; padding: 0 2rem; }
-        .admin-section { background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); margin-bottom: 2rem; }
-        .table-responsive { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #e0e0e0; }
-        th { background: #f8f9fa; font-weight: 600; color: #667eea; }
-        .btn-sm { padding: 0.5rem 1rem; font-size: 0.85rem; border-radius: 6px; border: none; cursor: pointer; text-decoration: none; display: inline-block; margin: 0.25rem; }
-        .btn-delete { background: #dc3545; color: white; }
-        .btn-delete:hover { background: #c82333; }
-        .badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.85rem; font-weight: 600; background: #667eea; color: white; }
-    </style>
-</head>
-<body>
-    <nav class="navbar">
-        <div class="nav-container">
-            <div class="nav-logo">
-                <i class="fas fa-hotel"></i>
-                <span>Paradise Hotel & Resort - Admin</span>
+.search-group input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 0.95rem;
+}
+
+.search-group input:focus {
+    outline: none;
+    border-color: #C9A961;
+}
+
+.search-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.btn-search {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-search.primary {
+    background: linear-gradient(135deg, #C9A961 0%, #8B7355 100%);
+    color: white;
+}
+
+.btn-search.secondary {
+    background: #f8f9fa;
+    color: #666;
+    border: 1px solid #e0e0e0;
+}
+
+.btn-search:hover {
+    transform: translateY(-2px);
+}
+
+.user-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #C9A961 0%, #8B7355 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-right: 1rem;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+}
+
+.user-details {
+    flex: 1;
+}
+
+.user-name {
+    font-weight: 700;
+    color: #2C3E50;
+    margin-bottom: 0.25rem;
+}
+
+.user-email {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.user-stats {
+    text-align: center;
+    color: #666;
+}
+
+.stat-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #C9A961;
+    display: block;
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 2rem;
+}
+
+.pagination a,
+.pagination span {
+    padding: 0.75rem 1rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    text-decoration: none;
+    color: #666;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.pagination a:hover {
+    background: #C9A961;
+    color: white;
+    border-color: #C9A961;
+}
+
+.pagination .current {
+    background: #C9A961;
+    color: white;
+    border-color: #C9A961;
+}
+</style>
+
+<!-- Page Header -->
+<div class="page-header">
+    <h1><i class="fas fa-users"></i> User Management</h1>
+    <p>Manage registered users and their accounts</p>
+</div>
+
+            <!-- Search Bar -->
+            <div class="search-bar">
+                <form method="GET" action="" style="display: contents;">
+                    <div class="search-group">
+                        <label for="search">Search Users</label>
+                        <input type="text" id="search" name="search" placeholder="Username, email, or full name" 
+                               value="<?php echo htmlspecialchars($searchTerm); ?>">
+                    </div>
+                    <div class="search-actions">
+                        <button type="submit" class="btn-search primary">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                        <a href="users.php" class="btn-search secondary">
+                            <i class="fas fa-times"></i> Clear
+                        </a>
+                    </div>
+                </form>
             </div>
-            <div class="nav-menu">
-                <a href="index.php" class="nav-link"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
-                <span class="nav-user"><i class="fas fa-user-circle"></i> Administrator</span>
-                <a href="../index.php" class="nav-link"><i class="fas fa-home"></i> View Site</a>
-            </div>
-        </div>
-    </nav>
 
-    <div class="admin-container">
-        <div class="admin-header" style="background: white; padding: 2rem; border-radius: 15px; margin-bottom: 2rem; box-shadow: 0 5px 20px rgba(0,0,0,0.1);">
-            <h1><i class="fas fa-users"></i> Manage Users</h1>
-        </div>
-        <?php if ($message): ?>
-            <div class="alert alert-<?php echo $messageType === 'success' ? 'success' : 'error'; ?>" style="margin-bottom: 2rem;">
-                <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : 'exclamation-circle'; ?>"></i> <?php echo htmlspecialchars($message); ?>
-            </div>
-        <?php endif; ?>
-
-        <div class="admin-section" style="margin-bottom:1.5rem;">
-            <h2><i class="fas fa-user-shield"></i> Create Admin Account</h2>
-            <form method="POST" style="max-width:700px;">
-                <input type="hidden" name="create_admin" value="1">
-                <div style="display:flex; gap:1rem; flex-wrap:wrap;">
-                    <div style="flex:1; min-width:200px;">
-                        <label>Username</label>
-                        <input type="text" name="username" class="form-control" required>
-                    </div>
-                    <div style="flex:1; min-width:200px;">
-                        <label>Email</label>
-                        <input type="email" name="email" class="form-control" required>
-                    </div>
-                    <div style="flex:1; min-width:200px;">
-                        <label>Full Name</label>
-                        <input type="text" name="full_name" class="form-control" required>
-                    </div>
-                    <div style="flex:1; min-width:200px;">
-                        <label>Password</label>
-                        <input type="password" name="password" class="form-control" required>
-                    </div>
-                    <div style="flex:1; min-width:200px;">
-                        <label>Confirm Password</label>
-                        <input type="password" name="confirm" class="form-control" required>
-                    </div>
+            <!-- Users Table -->
+            <div class="admin-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-list"></i> Registered Users (<?php echo number_format($totalUsers); ?>)</h2>
                 </div>
-                <div style="margin-top:0.75rem;">
-                    <button type="submit" class="btn-primary"><i class="fas fa-user-plus"></i> Create Admin</button>
-                </div>
-            </form>
-        </div>
-
-        <div class="admin-section">
-            <div class="table-responsive">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Username</th>
-                            <th>Full Name</th>
-                            <th>Email</th>
-                            <th>Reservations</th>
-                            <th>Joined</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($users)): ?>
+                
+                <?php if (!empty($users)): ?>
+                <div class="table-container">
+                    <table class="admin-table">
+                        <thead>
                             <tr>
-                                <td colspan="7" style="text-align: center; padding: 2rem; color: #999;">No users found</td>
+                                <th>User</th>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Reservations</th>
+                                <th>Joined</th>
+                                <th>Status</th>
                             </tr>
-                        <?php else: ?>
+                        </thead>
+                        <tbody>
                             <?php foreach ($users as $user): ?>
-                                <tr>
-                                    <td>#<?php echo str_pad($user['id'], 4, '0', STR_PAD_LEFT); ?></td>
-                                    <td><?php echo htmlspecialchars($user['username']); ?></td>
-                                    <td><?php echo htmlspecialchars($user['full_name']); ?></td>
-                                    <td><?php echo htmlspecialchars($user['email']); ?></td>
-                                    <td>
-                                        <span class="badge"><?php echo $user['reservation_count']; ?></span>
-                                    </td>
-                                    <td><?php echo date('M d, Y', strtotime($user['created_at'])); ?></td>
-                                    <td>
-                                        <a href="view_user.php?id=<?php echo $user['id']; ?>" class="btn-sm" style="background:#6c757d;color:#fff;text-decoration:none;border-radius:6px;padding:0.4rem 0.75rem;">View</a>
-                                        <a href="change_user_password.php?id=<?php echo $user['id']; ?>" class="btn-sm" style="background:#28a745;color:#fff;text-decoration:none;border-radius:6px;padding:0.4rem 0.75rem;">Change Password</a>
-                                        <?php
-                                            // Do not allow deleting admin accounts from UI
-                                            $isAdminUser = isset($user['is_admin']) && $user['is_admin'] == 1;
-                                            $currentAdminId = $_SESSION['admin_id'] ?? null;
-                                        ?>
-                                        <?php if (!$isAdminUser && $currentAdminId && $currentAdminId != $user['id']): ?>
-                                            <form method="POST" action="delete_user.php" style="display:inline;">
-                                                <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
-                                                <button type="submit" class="btn-sm btn-delete" onclick="return confirm('Are you sure you want to delete this user? This will also delete all their reservations.');"><i class="fas fa-trash"></i> Delete</button>
-                                            </form>
-                                        <?php elseif ($isAdminUser): ?>
-                                            <span style="color: #999; margin-left:0.5rem;">Admin Account</span>
-                                        <?php else: ?>
-                                            <span style="color: #999; margin-left:0.5rem;">Current Admin</span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
+                            <tr>
+                                <td>
+                                    <div class="user-info">
+                                        <div class="user-avatar">
+                                            <?php echo strtoupper(substr($user['full_name'] ?? $user['username'], 0, 1)); ?>
+                                        </div>
+                                        <div class="user-details">
+                                            <div class="user-name"><?php echo htmlspecialchars($user['full_name']); ?></div>
+                                            <div class="user-email"><?php echo htmlspecialchars($user['email']); ?></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <strong><?php echo htmlspecialchars($user['username']); ?></strong>
+                                </td>
+                                <td>
+                                    <a href="mailto:<?php echo htmlspecialchars($user['email']); ?>" style="color: #C9A961; text-decoration: none;">
+                                        <?php echo htmlspecialchars($user['email']); ?>
+                                    </a>
+                                </td>
+                                <td>
+                                    <div class="user-stats">
+                                        <span class="stat-number"><?php echo $user['reservation_count']; ?></span>
+                                        <span class="stat-label">Bookings</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <?php echo date('M j, Y', strtotime($user['created_at'])); ?>
+                                    <div style="font-size: 0.85rem; color: #666;">
+                                        <?php echo date('g:i A', strtotime($user['created_at'])); ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="status-badge status-confirmed">
+                                        <i class="fas fa-check-circle"></i> Active
+                                    </span>
+                                </td>
+                            </tr>
                             <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</body>
-</html>
+                        </tbody>
+                    </table>
+                </div>
 
+                <!-- Pagination -->
+                <?php if ($totalPages > 1): ?>
+                <div class="pagination">
+                    <?php if ($page > 1): ?>
+                        <a href="?page=<?php echo $page - 1; ?>&search=<?php echo urlencode($searchTerm); ?>">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </a>
+                    <?php endif; ?>
+                    
+                    <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
+                        <?php if ($i === $page): ?>
+                            <span class="current"><?php echo $i; ?></span>
+                        <?php else: ?>
+                            <a href="?page=<?php echo $i; ?>&search=<?php echo urlencode($searchTerm); ?>">
+                                <?php echo $i; ?>
+                            </a>
+                        <?php endif; ?>
+                    <?php endfor; ?>
+                    
+                    <?php if ($page < $totalPages): ?>
+                        <a href="?page=<?php echo $page + 1; ?>&search=<?php echo urlencode($searchTerm); ?>">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </a>
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
+
+                <?php else: ?>
+                <div class="empty-state">
+                    <i class="fas fa-users"></i>
+                    <h3>No Users Found</h3>
+                    <p>
+                        <?php if (!empty($searchTerm)): ?>
+                            No users match your search criteria.
+                        <?php else: ?>
+                            No users have registered yet.
+                        <?php endif; ?>
+                    </p>
+                </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- User Statistics -->
+            <div class="admin-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-chart-bar"></i> User Statistics</h2>
+                </div>
+                
+                <div class="quick-actions">
+                    <div class="action-card">
+                        <div class="action-icon">
+                            <i class="fas fa-user-plus"></i>
+                        </div>
+                        <div class="action-content">
+                            <h3>Total Registered Users</h3>
+                            <p><strong><?php echo number_format($totalUsers); ?></strong> users have created accounts on your website.</p>
+                        </div>
+                    </div>
+
+                    <div class="action-card">
+                        <div class="action-icon">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <div class="action-content">
+                            <h3>Active Customers</h3>
+                            <p>Users who have made at least one reservation and are actively using your services.</p>
+                        </div>
+                    </div>
+
+                    <div class="action-card">
+                        <div class="action-icon">
+                            <i class="fas fa-envelope"></i>
+                        </div>
+                        <div class="action-content">
+                            <h3>Communication</h3>
+                            <p>Contact users directly via email for special offers, updates, or customer service.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+<?php include 'template_footer.php'; ?>

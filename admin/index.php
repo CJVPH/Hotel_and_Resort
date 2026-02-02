@@ -1,336 +1,282 @@
 <?php
-require_once 'auth.php';
 require_once '../config/database.php';
+require_once '../config/auth.php';
 
-$conn = getDBConnection();
+// Require admin login
+requireAdminLogin();
 
-// Get statistics
-$stats = [];
+// Get dashboard statistics
+try {
+    $conn = getDBConnection();
+    
+    // Total reservations
+    $totalReservations = 0;
+    $result = $conn->query("SELECT COUNT(*) as count FROM reservations");
+    if ($result) {
+        $row = $result->fetch_assoc();
+        $totalReservations = $row['count'];
+    }
+    
+    // Pending reservations
+    $pendingReservations = 0;
+    $result = $conn->query("SELECT COUNT(*) as count FROM reservations WHERE status = 'pending'");
+    if ($result) {
+        $row = $result->fetch_assoc();
+        $pendingReservations = $row['count'];
+    }
+    
+    // Confirmed reservations
+    $confirmedReservations = 0;
+    $result = $conn->query("SELECT COUNT(*) as count FROM reservations WHERE status = 'confirmed'");
+    if ($result) {
+        $row = $result->fetch_assoc();
+        $confirmedReservations = $row['count'];
+    }
+    
+    // Total revenue
+    $totalRevenue = 0;
+    $result = $conn->query("SELECT SUM(payment_amount) as total FROM reservations WHERE payment_status IN ('completed', 'pending')");
+    if ($result) {
+        $row = $result->fetch_assoc();
+        $totalRevenue = $row['total'] ?? 0;
+    }
+    
+    // Monthly revenue (current month)
+    $monthlyRevenue = 0;
+    $currentMonth = date('Y-m');
+    $result = $conn->query("SELECT SUM(payment_amount) as total FROM reservations WHERE payment_status IN ('completed', 'pending') AND DATE_FORMAT(created_at, '%Y-%m') = '$currentMonth'");
+    if ($result) {
+        $row = $result->fetch_assoc();
+        $monthlyRevenue = $row['total'] ?? 0;
+    }
+    
+    // Today's reservations
+    $todayReservations = 0;
+    $today = date('Y-m-d');
+    $result = $conn->query("SELECT COUNT(*) as count FROM reservations WHERE DATE(created_at) = '$today'");
+    if ($result) {
+        $row = $result->fetch_assoc();
+        $todayReservations = $row['count'];
+    }
+    
+    // Cancelled reservations
+    $cancelledReservations = 0;
+    $result = $conn->query("SELECT COUNT(*) as count FROM reservations WHERE status = 'cancelled'");
+    if ($result) {
+        $row = $result->fetch_assoc();
+        $cancelledReservations = $row['count'];
+    }
+    
+    // Average booking value
+    $averageBookingValue = 0;
+    $result = $conn->query("SELECT AVG(payment_amount) as average FROM reservations WHERE payment_status IN ('completed', 'pending')");
+    if ($result) {
+        $row = $result->fetch_assoc();
+        $averageBookingValue = $row['average'] ?? 0;
+    }
+    
+    // Most popular room type
+    $popularRoomType = 'N/A';
+    $result = $conn->query("SELECT room_type, COUNT(*) as count FROM reservations GROUP BY room_type ORDER BY count DESC LIMIT 1");
+    if ($result && $result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        $popularRoomType = $row['room_type'];
+    }
+    
+    // Total users
+    $totalUsers = 0;
+    $result = $conn->query("SELECT COUNT(*) as count FROM users WHERE is_admin = 0");
+    if ($result) {
+        $row = $result->fetch_assoc();
+        $totalUsers = $row['count'];
+    }
+    
+    // Recent reservations
+    $recentReservations = [];
+    $result = $conn->query("SELECT r.*, u.username FROM reservations r LEFT JOIN users u ON r.user_id = u.id ORDER BY r.created_at DESC LIMIT 5");
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $recentReservations[] = $row;
+        }
+    }
+    
+    $conn->close();
+    
+} catch (Exception $e) {
+    error_log("Admin dashboard error: " . $e->getMessage());
+    $totalReservations = $pendingReservations = $confirmedReservations = $totalRevenue = $totalUsers = 0;
+    $monthlyRevenue = $todayReservations = $cancelledReservations = $averageBookingValue = 0;
+    $popularRoomType = 'N/A';
+    $recentReservations = [];
+}
 
-// Total reservations
-$result = $conn->query("SELECT COUNT(*) as total FROM reservations");
-$stats['total_reservations'] = $result->fetch_assoc()['total'];
-
-// Pending reservations
-$result = $conn->query("SELECT COUNT(*) as total FROM reservations WHERE status = 'pending'");
-$stats['pending_reservations'] = $result->fetch_assoc()['total'];
-
-// Confirmed reservations
-$result = $conn->query("SELECT COUNT(*) as total FROM reservations WHERE status = 'confirmed'");
-$stats['confirmed_reservations'] = $result->fetch_assoc()['total'];
-
-// Total users
-$result = $conn->query("SELECT COUNT(*) as total FROM users");
-$stats['total_users'] = $result->fetch_assoc()['total'];
-
-// Total revenue
-$result = $conn->query("SELECT SUM(price) as total FROM reservations WHERE status = 'confirmed'");
-$revenue = $result->fetch_assoc()['total'];
-$stats['total_revenue'] = $revenue ? number_format($revenue, 2) : '0.00';
-
-// Recent reservations
-$result = $conn->query("SELECT r.*, u.username, u.full_name FROM reservations r LEFT JOIN users u ON r.user_id = u.id ORDER BY r.created_at DESC LIMIT 5");
-$recent_reservations = $result->fetch_all(MYSQLI_ASSOC);
-
-$conn->close();
+// Set page variables for template
+$pageTitle = 'Dashboard';
+$currentPage = 'dashboard';
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - Paradise Hotel & Resort</title>
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        .admin-dashboard {
-            max-width: 1400px;
-            margin: 2rem auto;
-            padding: 0 2rem;
-        }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        .stat-card {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        .stat-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            color: white;
-        }
-        .stat-icon.blue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .stat-icon.green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-        .stat-icon.orange { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-        .stat-icon.purple { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-        .stat-info h3 {
-            margin: 0;
-            font-size: 2rem;
-            color: #333;
-        }
-        .stat-info p {
-            margin: 0.25rem 0 0 0;
-            color: #666;
-            font-size: 0.9rem;
-        }
-        .admin-section {
-            background: white;
-            padding: 2rem;
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-            margin-bottom: 2rem;
-        }
-        .admin-section h2 {
-            color: #667eea;
-            margin-bottom: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .admin-menu {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        .admin-menu-item {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-            text-decoration: none;
-            color: #333;
-            transition: all 0.3s;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-        }
-        .admin-menu-item:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
-        }
-        .admin-menu-item i {
-            font-size: 2.5rem;
-            color: #667eea;
-            margin-bottom: 0.5rem;
-        }
-        .admin-menu-item h3 {
-            margin: 0;
-            font-size: 1.1rem;
-        }
-        .table-responsive {
-            overflow-x: auto;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 1rem;
-            text-align: left;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        th {
-            background: #f8f9fa;
-            font-weight: 600;
-            color: #667eea;
-        }
-        .badge {
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-        .badge-pending { background: #fff3cd; color: #856404; }
-        .badge-confirmed { background: #d4edda; color: #155724; }
-        .badge-cancelled { background: #f8d7da; color: #721c24; }
-        .btn-sm {
-            padding: 0.5rem 1rem;
-            font-size: 0.85rem;
-            border-radius: 6px;
-            border: none;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .btn-view { background: #667eea; color: white; }
-        .btn-view:hover { background: #5568d3; }
-        .btn-edit { background: #28a745; color: white; }
-        .btn-edit:hover { background: #218838; }
-        .btn-delete { background: #dc3545; color: white; }
-        .btn-delete:hover { background: #c82333; }
-    </style>
-</head>
-<body>
-    <nav class="navbar">
-        <div class="nav-container">
-            <div class="nav-logo">
-                <i class="fas fa-hotel"></i>
-                <span>Paradise Hotel & Resort - Admin</span>
-            </div>
-            <div class="nav-menu">
-                <span class="nav-user"><i class="fas fa-user-circle"></i> Administrator</span>
-                <a href="../index.php" class="nav-link"><i class="fas fa-home"></i> View Site</a>
-            </div>
-        </div>
-    </nav>
+<?php include 'template_header.php'; ?>
 
-    <div class="admin-dashboard">
-        <div class="admin-header" style="background: white; padding: 2rem; border-radius: 15px; margin-bottom: 2rem; box-shadow: 0 5px 20px rgba(0,0,0,0.1);">
-            <h1><i class="fas fa-tachometer-alt"></i> Admin Dashboard</h1>
-            <p>Manage your hotel reservation system</p>
-        </div>
+<!-- Page Header -->
+<div class="page-header">
+    <h1><i class="fas fa-tachometer-alt"></i> Dashboard</h1>
+    <p>Welcome to Paradise Hotel & Resort Administration Panel</p>
+</div>
 
-        <!-- Statistics Cards -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon blue">
-                    <i class="fas fa-calendar-check"></i>
-                </div>
-                <div class="stat-info">
-                    <h3><?php echo $stats['total_reservations']; ?></h3>
-                    <p>Total Reservations</p>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon orange">
-                    <i class="fas fa-clock"></i>
-                </div>
-                <div class="stat-info">
-                    <h3><?php echo $stats['pending_reservations']; ?></h3>
-                    <p>Pending Reservations</p>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon green">
-                    <i class="fas fa-check-circle"></i>
-                </div>
-                <div class="stat-info">
-                    <h3><?php echo $stats['confirmed_reservations']; ?></h3>
-                    <p>Confirmed Reservations</p>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon purple">
-                    <i class="fas fa-users"></i>
-                </div>
-                <div class="stat-info">
-                    <h3><?php echo $stats['total_users']; ?></h3>
-                    <p>Total Users</p>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon green">
-                    <i class="fas fa-money-bill-wave"></i>
-                </div>
-                <div class="stat-info">
-                    <h3>₱<?php echo $stats['total_revenue']; ?></h3>
-                    <p>Total Revenue</p>
-                </div>
-            </div>
+<!-- Statistics Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-calendar-check"></i>
         </div>
-
-        <!-- Admin Menu -->
-        <div class="admin-menu">
-            <a href="reservations.php" class="admin-menu-item">
-                <i class="fas fa-calendar-alt"></i>
-                <h3>Manage Reservations</h3>
-                <p>View and manage all bookings</p>
-            </a>
-            <a href="users.php" class="admin-menu-item">
-                <i class="fas fa-users"></i>
-                <h3>Manage Users</h3>
-                <p>View and manage user accounts</p>
-            </a>
-            <a href="upload_images.php" class="admin-menu-item">
-                <i class="fas fa-images"></i>
-                <h3>Room Images</h3>
-                <p>Upload and manage room photos</p>
-            </a>
-            <a href="rooms.php" class="admin-menu-item">
-                <i class="fas fa-bed"></i>
-                <h3>Room Management</h3>
-                <p>Manage room types and pricing</p>
-            </a>
-            <a href="settings.php" class="admin-menu-item">
-                <i class="fas fa-cog"></i>
-                <h3>Settings</h3>
-                <p>Website configuration</p>
-            </a>
-        </div>
-
-        <!-- Recent Reservations -->
-        <div class="admin-section">
-            <h2><i class="fas fa-clock"></i> Recent Reservations</h2>
-            <div class="table-responsive">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Guest Name</th>
-                            <th>Room Type</th>
-                            <th>Check-in</th>
-                            <th>Check-out</th>
-                            <th>Guests</th>
-                            <th>Price</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($recent_reservations)): ?>
-                            <tr>
-                                <td colspan="9" style="text-align: center; padding: 2rem; color: #999;">No reservations yet</td>
-                            </tr>
-                        <?php else: ?>
-                            <?php foreach ($recent_reservations as $reservation): ?>
-                                <tr>
-                                    <td>#<?php echo str_pad($reservation['id'], 6, '0', STR_PAD_LEFT); ?></td>
-                                    <td><?php echo htmlspecialchars($reservation['guest_name']); ?></td>
-                                    <td><?php echo htmlspecialchars($reservation['room_type']); ?></td>
-                                    <td><?php echo date('M d, Y', strtotime($reservation['checkin_date'])); ?></td>
-                                    <td><?php echo date('M d, Y', strtotime($reservation['checkout_date'])); ?></td>
-                                    <td><?php echo $reservation['guests']; ?> pax</td>
-                                    <td>₱<?php echo number_format($reservation['price'], 2); ?></td>
-                                    <td>
-                                        <span class="badge badge-<?php echo strtolower($reservation['status']); ?>">
-                                            <?php echo ucfirst($reservation['status']); ?>
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <a href="reservations.php?id=<?php echo $reservation['id']; ?>" class="btn-sm btn-view">
-                                            <i class="fas fa-eye"></i> View
-                                        </a>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-            <div style="margin-top: 1rem; text-align: right;">
-                <a href="reservations.php" class="btn-primary">
-                    <i class="fas fa-list"></i> View All Reservations
-                </a>
-            </div>
-        </div>
+        <div class="stat-number"><?php echo number_format($totalReservations); ?></div>
+        <div class="stat-label">Total Reservations</div>
     </div>
-</body>
-</html>
 
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-clock"></i>
+        </div>
+        <div class="stat-number"><?php echo number_format($pendingReservations); ?></div>
+        <div class="stat-label">Pending Reservations</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-check-circle"></i>
+        </div>
+        <div class="stat-number"><?php echo number_format($confirmedReservations); ?></div>
+        <div class="stat-label">Confirmed Reservations</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-users"></i>
+        </div>
+        <div class="stat-number"><?php echo number_format($totalUsers); ?></div>
+        <div class="stat-label">Registered Users</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-money-bill-wave"></i>
+        </div>
+        <div class="stat-number">₱<?php echo number_format($totalRevenue, 2); ?></div>
+        <div class="stat-label">Total Revenue</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-chart-line"></i>
+        </div>
+        <div class="stat-number">₱<?php echo number_format($monthlyRevenue, 2); ?></div>
+        <div class="stat-label">Monthly Revenue</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-calendar-day"></i>
+        </div>
+        <div class="stat-number"><?php echo number_format($todayReservations); ?></div>
+        <div class="stat-label">Today's Bookings</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-calculator"></i>
+        </div>
+        <div class="stat-number">₱<?php echo number_format($averageBookingValue, 2); ?></div>
+        <div class="stat-label">Average Booking Value</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-times-circle"></i>
+        </div>
+        <div class="stat-number"><?php echo number_format($cancelledReservations); ?></div>
+        <div class="stat-label">Cancelled Reservations</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-star"></i>
+        </div>
+        <div class="stat-text"><?php echo htmlspecialchars($popularRoomType); ?></div>
+        <div class="stat-label">Most Popular Room</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-percentage"></i>
+        </div>
+        <div class="stat-number">
+            <?php 
+            $successRate = $totalReservations > 0 ? (($confirmedReservations / $totalReservations) * 100) : 0;
+            echo number_format($successRate, 1) . '%';
+            ?>
+        </div>
+        <div class="stat-label">Booking Success Rate</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon">
+            <i class="fas fa-server"></i>
+        </div>
+        <div class="stat-status online">
+            <i class="fas fa-circle"></i> Online
+        </div>
+        <div class="stat-label">System Status</div>
+    </div>
+</div>
+
+            <!-- Recent Reservations -->
+            <div class="admin-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-history"></i> Recent Reservations</h2>
+                    <a href="reservations.php" class="btn btn-primary">View All</a>
+                </div>
+                
+                <?php if (!empty($recentReservations)): ?>
+                <div class="table-container">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Guest Name</th>
+                                <th>Room</th>
+                                <th>Check-in</th>
+                                <th>Check-out</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($recentReservations as $reservation): ?>
+                            <tr>
+                                <td>#<?php echo $reservation['id']; ?></td>
+                                <td><?php echo htmlspecialchars($reservation['guest_name']); ?></td>
+                                <td><?php echo htmlspecialchars($reservation['room_type']); ?></td>
+                                <td><?php echo date('M j, Y', strtotime($reservation['checkin_date'])); ?></td>
+                                <td><?php echo date('M j, Y', strtotime($reservation['checkout_date'])); ?></td>
+                                <td>₱<?php echo number_format($reservation['price'], 2); ?></td>
+                                <td>
+                                    <span class="status-badge status-<?php echo $reservation['status']; ?>">
+                                        <?php echo ucfirst($reservation['status']); ?>
+                                    </span>
+                                </td>
+                                <td><?php echo date('M j, Y', strtotime($reservation['created_at'])); ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php else: ?>
+                <div class="empty-state">
+                    <i class="fas fa-calendar-times"></i>
+                    <h3>No Reservations Yet</h3>
+                    <p>Reservations will appear here once customers start booking.</p>
+                </div>
+                <?php endif; ?>
+            </div>
+
+<?php include 'template_footer.php'; ?>
