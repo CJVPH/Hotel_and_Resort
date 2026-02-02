@@ -1,158 +1,170 @@
-# Paradise Hotel & Resort - Reservation System
+# 🏨 Paradise Hotel & Resort - Complete Booking System
 
-A modern, professional hotel reservation website with user authentication and booking management.
+A comprehensive hotel booking and management system with elegant design, full-featured admin panel, and multi-image room management.
 
-## Features
+## 🌟 Features
 
-- ✨ Modern, responsive design
-- 🔐 User registration and login system
-- 📅 Room reservation with date validation
-- 💰 Automatic price calculation
-- 📊 Reservation confirmation page
-- 🎨 Beautiful UI with gradient backgrounds
-- 📱 Mobile-friendly responsive design
+### **Public Website**
+- ✅ **Room Booking System** - Professional booking experience with image galleries
+- ✅ **Multiple Room Types** - Regular, Deluxe, and VIP accommodations
+- ✅ **Guest Capacity Options** - 2, 4-8, or 10-20 guests with appropriate configurations
+- ✅ **Townhouse Rooms** - Special 10-20 guest rooms with living areas and multiple bedrooms
+- ✅ **Image Galleries** - Multiple photos per room (up to 10 images each)
+- ✅ **Responsive Design** - Works perfectly on all devices
 
-## Requirements
+### **Admin Panel**
+- ✅ **Room Management** - Upload up to 10 images per individual room
+- ✅ **Drag & Drop Upload** - Easy image uploading with automatic processing
+- ✅ **Pricing Control** - Set prices for different room types and guest counts
+- ✅ **Reservation Management** - View and manage bookings
+- ✅ **User Management** - Manage customer accounts
+- ✅ **Photo Management** - Upload website photos (carousel, restaurant, etc.)
 
-- PHP 7.4 or higher
-- MySQL 5.7 or higher
-- Apache web server (XAMPP recommended)
-- Web browser
+### **Room System**
+- ✅ **18 Individual Rooms** - Each room can have unique photos
+- ✅ **Room Layout** - Top row (101, 201, 301), Bottom row (102, 202, 302) for all capacities
+- ✅ **Multiple Images** - Up to 10 photos per room with thumbnail galleries
+- ✅ **Image Management** - Individual image deletion and sorting
 
-## Installation
+## 🚀 Quick Start
 
-1. **Copy files to your web server**
-   - Place all files in your XAMPP `htdocs` folder (or your web server directory)
+### **1. Database Setup**
+Import `database_setup.sql` into your MySQL database:
+- Contains complete schema with all tables
+- Includes default room prices and admin account
+- Has troubleshooting SQL commands if needed
 
-2. **Create the database**
-   - Open phpMyAdmin (usually at `http://localhost/phpmyadmin`)
-   - Create a new database named `hotel_reservation`
-   - Import the `database_setup.sql` file OR run the SQL commands manually
+### **2. Admin Access**
+- **URL:** `your-website.com/admin/`
+- **Username:** `admin`
+- **Password:** `admin123`
 
-3. **Configure database connection**
-   - Open `config/database.php`
-   - Update the database credentials if needed:
-     ```php
-     define('DB_HOST', 'localhost');
-     define('DB_USER', 'root');
-     define('DB_PASS', '');  // Your MySQL password
-     define('DB_NAME', 'hotel_reservation');
-     ```
+### **3. Upload Room Images**
+1. Login to admin panel
+2. Go to Room Management
+3. Select room type tab (Regular/Deluxe/VIP)
+4. Drag & drop up to 10 images per room
+5. Images appear immediately in booking page
 
-4. **Start your web server**
-   - Start Apache and MySQL in XAMPP
-   - Open your browser and navigate to `http://localhost/Hotel and Resort/`
-
-## Usage
-
-1. **Register a new account**
-   - Click "Register" in the navigation bar
-   - Fill in your details and create an account
-
-2. **Login**
-   - Use your username/email and password to login
-
-3. **Make a reservation**
-   - Select check-in and check-out dates
-   - Choose room type (Regular, Deluxe, or VIP)
-   - Select number of guests
-   - View the automatically calculated price
-   - Submit your reservation
-
-4. **View confirmation**
-   - After booking, you'll see a confirmation page with all details
-   - You can print the confirmation if needed
-
-## Room Types & Pricing
-
-- **Regular Room**
-  - 2 Pax: ₱1,500
-  - 4-8 Pax: ₱3,000
-  - 10-20 Pax: ₱6,000
-
-- **Deluxe Room**
-  - 2 Pax: ₱2,500
-  - 4-8 Pax: ₱4,500
-  - 10-20 Pax: ₱8,500
-
-- **VIP Room**
-  - 2 Pax: ₱4,000
-  - 4-8 Pax: ₱7,000
-  - 10-20 Pax: ₱12,000
-
-## File Structure
+## 📁 Clean File Structure
 
 ```
-Hotel and Resort/
-├── assets/
-│   ├── css/
-│   │   └── style.css          # Main stylesheet
-│   └── js/
-│       └── script.js          # JavaScript functions
-├── config/
-│   ├── database.php           # Database configuration
-│   └── auth.php               # Authentication functions
-├── index.php                  # Home page & reservation form
-├── login.php                  # Login page
-├── register.php               # Registration page
-├── logout.php                 # Logout handler
-├── process.php                # Reservation processing
-├── confirmation.php           # Reservation confirmation
-├── database_setup.sql         # Database schema
-└── README.md                  # This file
+├── admin/                  # Admin panel (production-ready)
+│   ├── rooms.php          # Room management with multi-image upload
+│   ├── settings.php       # Website photo management
+│   ├── reservations.php   # Booking management
+│   ├── users.php          # User management
+│   └── simple_upload.php  # Clean image upload handler
+├── api/                   # API endpoints
+├── assets/               # CSS, JS, images
+├── config/               # Database and auth configuration
+├── uploads/              # Uploaded images
+│   └── rooms/individual/ # Individual room photos
+├── booking.php           # Customer booking page with galleries
+├── index.php            # Homepage
+└── database_setup.sql   # Complete database schema + troubleshooting
 ```
 
-## Security Features
+## 🎯 Room System Details
 
-- Password hashing using PHP `password_hash()`
-- SQL injection prevention with prepared statements
-- Session management for user authentication
-- Input validation and sanitization
-- CSRF protection ready (can be enhanced)
+### **18 Individual Rooms**
+- **Regular Rooms:** 101, 102, 103, 104, 105, 106
+- **Deluxe Rooms:** 201, 202, 203, 204, 205, 206  
+- **VIP Suites:** 301, 302, 303, 304, 305, 306
 
-## Customization
+### **Guest Capacities**
+- **2 Guests:** Standard rooms with regular beds
+- **4-8 Guests:** Family rooms (Regular rooms use double deck beds)
+- **10-20 Guests:** Townhouse-style with ground floor living/kitchen, second floor bedrooms
 
-### Change Colors
-Edit the gradient colors in `assets/css/style.css`:
-```css
-background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-```
+### **Image System**
+- **Up to 10 images per room** - Each of the 18 rooms can have unique photos
+- **Drag & drop upload** - No upload buttons needed, automatic processing
+- **Image galleries** - Customers see all photos in booking page
+- **Individual deletion** - Remove specific images with × button
+- **Tab persistence** - Stay on current room type after upload
 
-### Modify Room Prices
-Edit the `calculatePrice()` function in `assets/js/script.js`
+## 🖼️ Image Management
 
-### Change Hotel Name
-Update the hotel name in:
-- `index.php` (navigation and hero section)
-- `login.php` and `register.php` (page titles)
+### **Supported Features**
+- **Multiple images per room** - No unique constraints blocking uploads
+- **Drag & drop interface** - Like settings page, automatic upload
+- **File validation** - JPEG, PNG, WebP up to 5MB each
+- **Automatic processing** - Unique filenames, database storage
+- **Sort ordering** - Images maintain upload order
+- **Clean interface** - No debugging clutter, professional appearance
 
-## Troubleshooting
+### **Upload Process**
+1. Select room type tab (Regular/Deluxe/VIP)
+2. Drag images to any room's upload zone
+3. Images upload automatically (no button needed)
+4. Page reloads and stays on same tab
+5. Images appear in booking page galleries
 
-**Database connection error:**
-- Check if MySQL is running
-- Verify database credentials in `config/database.php`
-- Ensure database `hotel_reservation` exists
+## 🛠️ Technical Details
 
-**Session not working:**
-- Make sure `session_start()` is called before any output
-- Check PHP session configuration
+### **Database Tables**
+- `users` - Customer and admin accounts
+- `reservations` - Booking records with payment info
+- `room_prices` - Admin-controlled pricing
+- `room_images` - Individual room photos (supports multiple per room)
+- `website_photos` - General website images
 
-**Styles not loading:**
-- Verify file paths are correct
-- Check if CSS/JS files are accessible
+### **Key Improvements**
+- **No unique constraints** on room images (allows multiple images)
+- **Clean code** - All debugging and testing files removed
+- **Tab persistence** - Upload stays on current room type
+- **Production ready** - No debug output or test files
+- **Consolidated SQL** - All database commands in one file
 
-## Browser Support
+### **Pricing Structure**
+| Room Type | 2 Guests | 4-8 Guests | 10-20 Guests |
+|-----------|----------|------------|--------------|
+| Regular   | ₱1,500   | ₱3,000     | ₱6,000       |
+| Deluxe    | ₱2,500   | ₱4,500     | ₱8,500       |
+| VIP       | ₱4,000   | ₱7,000     | ₱12,000      |
 
-- Chrome (latest)
-- Firefox (latest)
-- Safari (latest)
-- Edge (latest)
+## 🔧 Troubleshooting
 
-## License
+All SQL commands are in `database_setup.sql`:
 
-This project is open source and available for educational purposes.
+### **Fresh Installation**
+Import the entire `database_setup.sql` file
 
-## Support
+### **Upload Issues**
+Check the troubleshooting section in the SQL file for:
+- Removing unique constraints
+- Adding missing columns
+- Testing multiple image insertion
 
-For issues or questions, please check the code comments or refer to PHP/MySQL documentation.
+### **Database Problems**
+Use the verification commands in the SQL file to check:
+- Table structure
+- Index configuration
+- Room prices
+- Admin account
 
+## 🎨 Design Features
+
+### **Colors**
+- **Primary:** Charcoal (#2C3E50, #34495E)
+- **Accent:** Gold (#C9A961, #8B7355)
+- **Modern design** with glass morphism effects
+
+### **Room Amenities**
+- **Realistic Philippine hotel setting**
+- **Appropriate amenities** for each room type
+- **Double deck beds** only for Regular rooms with 8 and 20 guests
+- **Townhouse descriptions** for large group accommodations
+
+## 📱 Mobile Responsive
+
+Fully responsive design works on:
+- Desktop computers
+- Tablets  
+- Mobile phones
+- All modern browsers
+
+---
+
+**Paradise Hotel & Resort** - Clean, Professional, Production-Ready Booking System! 🏨✨

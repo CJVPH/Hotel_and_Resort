@@ -1,14 +1,22 @@
 <?php
 require_once 'config/database.php';
 require_once 'config/auth.php';
+require_once 'includes/photo_functions.php';
+
+// Get photos for different sections
+$carouselPhotos = getPhotosWithFallback('carousel', 3);
+$poolPhotos = getPhotosWithFallback('pool', 3);
+$spaPhotos = getPhotosWithFallback('spa', 3);
+$restaurantPhotos = getPhotosWithFallback('restaurant', 3);
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" id="top">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paradise Hotel & Resort - Book Your Stay</title>
-    <link rel="stylesheet" href="assets/css/style.css">
+    <title>Paradise Hotel & Resort - Luxury Accommodation</title>
+    <meta name="description" content="Experience luxury at Paradise Hotel & Resort. Premium accommodations, world-class amenities, and exceptional service.">
+    <link rel="stylesheet" href="assets/css/main.css?v=2.0">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
@@ -16,229 +24,406 @@ require_once 'config/auth.php';
     <!-- Navigation -->
     <nav class="navbar">
         <div class="nav-container">
-            <div class="nav-logo">
+            <a href="#top" class="nav-logo">
                 <i class="fas fa-hotel"></i>
                 <span>Paradise Hotel & Resort</span>
-            </div>
+            </a>
+            <button class="nav-toggle" aria-label="Toggle navigation menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
             <div class="nav-menu">
+                <div class="nav-dropdown">
+                    <a href="javascript:void(0)" class="nav-link">
+                        Rooms
+                        <i class="fas fa-chevron-down"></i>
+                    </a>
+                    <div class="dropdown-menu">
+                        <a href="regular-gallery.php" class="dropdown-item">Regular</a>
+                        <a href="deluxe-gallery.php" class="dropdown-item">Deluxe</a>
+                        <a href="vip-gallery.php" class="dropdown-item">VIP</a>
+                    </div>
+                </div>
+                <a href="#pool" class="nav-link">Swimming Pool</a>
+                <a href="#restaurant" class="nav-link">Restaurant</a>
+                <a href="#spa" class="nav-link">Spa</a>
+                <a href="#about" class="nav-link">About Us</a>
+                <a href="#contact" class="nav-link">Contact Us</a>
+                
                 <?php if (isLoggedIn()): ?>
-                    <span class="nav-user"><i class="fas fa-user-circle"></i> Welcome, <?php echo htmlspecialchars($_SESSION['full_name'] ?? $_SESSION['username']); ?>!</span>
-                    <a href="logout.php" class="nav-link"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                    <a href="booking.php" class="nav-link book-now">
+                        <i class="fas fa-calendar-check"></i>
+                        Book Now
+                    </a>
+                    <div class="nav-user">
+                        <i class="fas fa-user-circle"></i>
+                        <span><?php echo htmlspecialchars(getFullName() ?? getUsername()); ?></span>
+                    </div>
+                    <a href="logout.php" class="nav-link">Logout</a>
                 <?php else: ?>
-                    <a href="login.php" class="nav-link"><i class="fas fa-sign-in-alt"></i> Login</a>
-                    <a href="register.php" class="nav-link btn-nav-register"><i class="fas fa-user-plus"></i> Register</a>
+                    <a href="booking.php" class="nav-link book-now">
+                        <i class="fas fa-calendar-check"></i>
+                        Book Now
+                    </a>
+                    <a href="login.php" class="nav-link">
+                        <i class="fas fa-user"></i>
+                        Login
+                    </a>
+                    <a href="register.php" class="nav-link">
+                        <i class="fas fa-user-plus"></i>
+                        Register
+                    </a>
                 <?php endif; ?>
             </div>
         </div>
     </nav>
-    <!-- Dynamic configuration options for multi-pax bookings -->
-            <h1>Welcome to Paradise Hotel & Resort</h1>
-            <p>Experience luxury, comfort, and unforgettable memories</p>
-            <div class="hero-features">
-                <div class="feature-item">
-                    <i class="fas fa-wifi"></i>
-                    <span>Free WiFi</span>
-                </div>
-                <div class="feature-item">
-                    <i class="fas fa-swimming-pool"></i>
-                    <span>Swimming Pool</span>
-                </div>
-                <div class="feature-item">
-                    <i class="fas fa-utensils"></i>
-                    <span>Restaurant</span>
-                </div>
-                <div class="feature-item">
-                    <i class="fas fa-spa"></i>
-                    <span>Spa & Wellness</span>
+
+    <!-- Hero Carousel -->
+    <section class="hero-carousel">
+        <?php if (!empty($carouselPhotos)): ?>
+            <?php 
+            $carouselTitles = [
+                'Welcome to Paradise<br>Hotel & Resort',
+                'Special Offers',
+                'Luxury Redefined',
+                'Unforgettable Experience',
+                'Premium Amenities',
+                'Paradise Awaits'
+            ];
+            $carouselSubtitles = [
+                'Experience luxury, comfort, and unforgettable memories',
+                'Discover amazing deals and packages for your perfect getaway',
+                'Indulge in premium amenities and exceptional service',
+                'Create memories that will last a lifetime',
+                'Enjoy world-class facilities and personalized service',
+                'Your perfect vacation destination awaits you'
+            ];
+            $carouselButtons = [
+                ['icon' => 'fas fa-calendar-check', 'text' => 'Book Your Stay Now'],
+                ['icon' => 'fas fa-tags', 'text' => 'View Offers'],
+                ['icon' => 'fas fa-crown', 'text' => 'Experience Luxury'],
+                ['icon' => 'fas fa-heart', 'text' => 'Discover Paradise'],
+                ['icon' => 'fas fa-star', 'text' => 'Premium Experience'],
+                ['icon' => 'fas fa-gem', 'text' => 'Book Paradise']
+            ];
+            ?>
+            
+            <?php foreach ($carouselPhotos as $index => $photo): ?>
+            <div class="carousel-slide <?php echo $index === 0 ? 'active' : ''; ?>" 
+                 style="background-image: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.4)), url('<?php echo $photo['file_path']; ?>');">
+                <div class="carousel-content">
+                    <h1><?php echo $carouselTitles[$index % count($carouselTitles)]; ?></h1>
+                    <p><?php echo $carouselSubtitles[$index % count($carouselSubtitles)]; ?></p>
+                    
+                    <!-- Service Features -->
+                    <div class="service-features">
+                        <div class="feature-item">
+                            <i class="fas fa-star"></i>
+                            <span>5 Star Luxury</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-wifi"></i>
+                            <span>Free WIFI</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-parking"></i>
+                            <span>Free Parking</span>
+                        </div>
+                    </div>
+                    
+                    <a href="booking.php" class="carousel-btn">
+                        <i class="<?php echo $carouselButtons[$index % count($carouselButtons)]['icon']; ?>"></i> 
+                        <?php echo $carouselButtons[$index % count($carouselButtons)]['text']; ?>
+                    </a>
                 </div>
             </div>
+            <?php endforeach; ?>
+            
+        <?php else: ?>
+            <!-- Default slide when no images are uploaded -->
+            <div class="carousel-slide active" style="background: linear-gradient(135deg, #2C3E50 0%, #34495E 100%);">
+                <div class="carousel-content">
+                    <h1>Welcome to Paradise<br>Hotel & Resort</h1>
+                    <p>Experience luxury, comfort, and unforgettable memories</p>
+                    
+                    <!-- Service Features -->
+                    <div class="service-features">
+                        <div class="feature-item">
+                            <i class="fas fa-star"></i>
+                            <span>5 Star Luxury</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-wifi"></i>
+                            <span>Free WIFI</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-parking"></i>
+                            <span>Free Parking</span>
+                        </div>
+                    </div>
+                    
+                    <a href="booking.php" class="carousel-btn">
+                        <i class="fas fa-calendar-check"></i> Book Your Stay Now
+                    </a>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <!-- Dynamic Carousel Indicators -->
+        <?php if (!empty($carouselPhotos) && count($carouselPhotos) > 1): ?>
+        <div class="carousel-indicators">
+            <?php foreach ($carouselPhotos as $index => $photo): ?>
+            <div class="indicator <?php echo $index === 0 ? 'active' : ''; ?>" data-slide="<?php echo $index; ?>"></div>
+            <?php endforeach; ?>
         </div>
-    </div>
+        <?php endif; ?>
+    </section>
 
     <!-- Main Content -->
-    <div class="main-content">
-            <div class="section-header">
-            <h2><i class="fas fa-calendar-check"></i> Make a Reservation</h2>
-            <?php if (!isLoggedIn()): ?>
-                <p class="login-prompt">Please <a href="login.php">login</a> or <a href="register.php">register</a> to make a reservation</p>
-            <?php endif; ?>
-        </div>
-
-        <div class="reservation-layout">
-                <!-- Left Side: Reservation Form -->
-                <div class="reservation-form-container">
-                    <form id="reservationForm" action="process.php" method="post" class="reservation-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label><i class="fas fa-user"></i> Guest Name</label>
-                        <input type="text" name="name" placeholder="Enter your full name" required value="<?php echo isLoggedIn() ? htmlspecialchars($_SESSION['full_name'] ?? '') : ''; ?>">
-                    </div>
-
-                    <div class="form-group">
-                        <label><i class="fas fa-users"></i> Number of Guests</label>
-                        <select name="guests" id="guests" onchange="calculatePrice()" required>
-                            <option value="">Select Pax</option>
-                            <option value="2">2 Pax</option>
-                            <option value="8">4–8 Pax</option>
-                            <option value="20">10–20 Pax</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label><i class="fas fa-calendar-alt"></i> Check-in Date</label>
-                        <input type="date" name="checkin" id="checkin" required min="<?php echo date('Y-m-d'); ?>" onchange="validateDates()">
-                    </div>
-
-                    <div class="form-group">
-                        <label><i class="fas fa-calendar-alt"></i> Check-out Date</label>
-                        <input type="date" name="checkout" id="checkout" required min="<?php echo date('Y-m-d'); ?>" onchange="validateDates(); calculatePrice()">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <button type="button" id="showAvailabilityBtn" class="btn-secondary">Show Availability</button>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label><i class="fas fa-bed"></i> Room Type</label>
-                    <div class="room-options">
-                        <div class="room-card" onclick="selectRoom('Regular')">
-                            <input type="radio" name="room" id="room-regular" value="Regular" onchange="displayRoomPreview('Regular'); calculatePrice()" required>
-                            <label for="room-regular">
-                                <i class="fas fa-home"></i>
-                                <span class="room-name">Regular</span>
-                                <span class="room-desc">Comfortable & Affordable</span>
-                            </label>
-                        </div>
-                        <div class="room-card" onclick="selectRoom('Deluxe')">
-                            <input type="radio" name="room" id="room-deluxe" value="Deluxe" onchange="displayRoomPreview('Deluxe').then(() => calculatePrice());">
-                            <label for="room-deluxe">
-                                <i class="fas fa-star"></i>
-                                <span class="room-name">Deluxe</span>
-                                <span class="room-desc">Premium Comfort</span>
-                            </label>
-                        </div>
-                        <div class="room-card" onclick="selectRoom('VIP')">
-                            <input type="radio" name="room" id="room-vip" value="VIP" onchange="displayRoomPreview('VIP').then(() => calculatePrice());">
-                            <label for="room-vip">
-                                <i class="fas fa-crown"></i>
-                                <span class="room-name">VIP</span>
-                                <span class="room-desc">Ultimate Luxury</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="price-summary">
-                    <div class="price-display">
-                        <label><i class="fas fa-money-bill-wave"></i> Total Price</label>
-                        <div class="price-value">
-                            <span class="currency">₱</span>
-                            <span id="price-display">0</span>
-                        </div>
-                        <input type="hidden" id="price" name="price" value="0">
-                    </div>
-                </div>
-
-                <!-- Dynamic configuration options for multi-pax bookings -->
-                <div id="configurationOptions" style="margin-top:1rem;">
-                    <!-- JS will inject bedroom/amenity options here for 4-8 and 10-20 pax -->
-                </div>
-
-                        <button type="submit" class="btn-reserve">
-                            <i class="fas fa-check-circle"></i> Reserve Now
-                        </button>
-                    </form>
-                </div>
-
-                <!-- Right Side: Room Preview -->
-                <div class="room-preview-container">
-                    <div class="room-preview-header">
-                        <h3><i class="fas fa-images"></i> Room Preview</h3>
-                        <p class="room-preview-subtitle">Select a room type to view details</p>
-                    </div>
-                    <div id="roomPreview" class="room-preview-content">
-                        <div class="room-preview-placeholder">
-                            <i class="fas fa-bed"></i>
-                            <p>Please select a room type to see images and details</p>
-                        </div>
-                    </div>
-                </div>
-        </div>
-
-        <!-- Features Section -->
-        <div class="features-section">
+    <main class="main-content">
+        <!-- Room & Suites Section -->
+        <section id="rooms" class="section">
             <div class="container">
-                <h2>Why Choose Us?</h2>
-                <div class="features-grid">
-                    <div class="feature-box">
-                        <i class="fas fa-shield-alt"></i>
-                        <h3>Secure Booking</h3>
-                        <p>Your information is safe with us</p>
+                <div class="section-header">
+                    <h2 class="section-title">Room & Suites</h2>
+                    <p class="section-subtitle">
+                        Choose from our luxurious rooms and suites designed for your comfort
+                    </p>
+                </div>
+                <div style="text-align: center;">
+                    <a href="<?php echo isLoggedIn() ? 'booking.php' : 'login.php'; ?>" class="btn btn-primary">
+                        <i class="fas fa-calendar-check"></i> View Rooms & Book Now
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Swimming Pool Section -->
+        <section id="pool" class="section">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-swimming-pool"></i> Swimming Pool
+                    </h2>
+                    <p class="section-subtitle">
+                        Dive into luxury with our pristine swimming pools and aquatic facilities
+                    </p>
+                </div>
+                <div class="photo-gallery pool-gallery">
+                    <?php foreach ($poolPhotos as $index => $photo): ?>
+                    <div class="photo-item">
+                        <img src="<?php echo $photo['file_path']; ?>" alt="Pool <?php echo $index + 1; ?>">
+                        <div class="photo-overlay">
+                            <h3>Pool Area <?php echo $index + 1; ?></h3>
+                            <p>Relax and unwind in our beautiful swimming facilities</p>
+                        </div>
                     </div>
-                    <div class="feature-box">
-                        <i class="fas fa-clock"></i>
-                        <h3>24/7 Support</h3>
-                        <p>We're here to help anytime</p>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </section>
+
+        <!-- Restaurant Section -->
+        <section id="restaurant" class="section">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-utensils"></i> Restaurant
+                    </h2>
+                    <p class="section-subtitle">
+                        Savor exquisite cuisine crafted by our world-renowned chefs
+                    </p>
+                </div>
+                <div class="photo-gallery restaurant-gallery">
+                    <?php foreach ($restaurantPhotos as $index => $photo): ?>
+                    <div class="photo-item">
+                        <img src="<?php echo $photo['file_path']; ?>" alt="Restaurant <?php echo $index + 1; ?>">
+                        <div class="photo-overlay">
+                            <h3>Dining Experience <?php echo $index + 1; ?></h3>
+                            <p>Indulge in culinary excellence with breathtaking views</p>
+                        </div>
                     </div>
-                    <div class="feature-box">
-                        <i class="fas fa-tag"></i>
-                        <h3>Best Prices</h3>
-                        <p>Competitive rates guaranteed</p>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </section>
+
+        <!-- Spa Section -->
+        <section id="spa" class="section">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-spa"></i> Spa
+                    </h2>
+                    <p class="section-subtitle">
+                        Rejuvenate your body and soul with our premium spa treatments
+                    </p>
+                </div>
+                <div class="photo-gallery spa-gallery">
+                    <?php foreach ($spaPhotos as $index => $photo): ?>
+                    <div class="photo-item">
+                        <img src="<?php echo $photo['file_path']; ?>" alt="Spa <?php echo $index + 1; ?>">
+                        <div class="photo-overlay">
+                            <h3>Spa Treatment <?php echo $index + 1; ?></h3>
+                            <p>Experience ultimate relaxation with our expert therapists</p>
+                        </div>
                     </div>
-                    <div class="feature-box">
-                        <i class="fas fa-heart"></i>
-                        <h3>Luxury Experience</h3>
-                        <p>Unforgettable stays await</p>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </section>
+
+        <!-- About Us Section -->
+        <section id="about" class="section">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title">About Us</h2>
+                    <p class="section-subtitle">
+                        Experience luxury and comfort in our world-class resort with premium amenities and exceptional service
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Contact Us Section -->
+        <section id="contact" class="section">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title">Contact Us</h2>
+                    <p class="section-subtitle">
+                        Get in touch with us for reservations and inquiries
+                    </p>
+                </div>
+                <div class="contact-info">
+                    <div class="contact-item">
+                        <i class="fas fa-phone"></i>
+                        <h4>Phone</h4>
+                        <p>+1 (555) 123-4567</p>
+                    </div>
+                    <div class="contact-item">
+                        <i class="fas fa-envelope"></i>
+                        <h4>Email</h4>
+                        <p>info@paradisehotel.com</p>
+                    </div>
+                    <div class="contact-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <h4>Address</h4>
+                        <p>123 Paradise Lane, Resort City</p>
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
+        </section>
+
+        <!-- Testimonials Section -->
+        <section id="testimonials" class="section">
+            <div class="container">
+                <div class="section-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-star"></i> Guest Reviews
+                    </h2>
+                    <p class="section-subtitle">
+                        Hear what our valued guests have to say about their experience
+                    </p>
+                </div>
+                <div class="testimonials">
+                    <div class="testimonial">
+                        <div class="testimonial-content">
+                            "An absolutely incredible experience! The staff was amazing, the rooms were luxurious, and the amenities exceeded all expectations. We'll definitely be back!"
+                        </div>
+                        <div class="testimonial-author">
+                            <div class="author-avatar">JD</div>
+                            <div class="author-info">
+                                <h4>John & Sarah Davis</h4>
+                                <p>Honeymoon Suite Guests</p>
+                                <div class="stars">
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="testimonial">
+                        <div class="testimonial-content">
+                            "Paradise Hotel truly lives up to its name. From the moment we arrived, we were treated like royalty. The spa treatments were divine and the food was exceptional."
+                        </div>
+                        <div class="testimonial-author">
+                            <div class="author-avatar">MJ</div>
+                            <div class="author-info">
+                                <h4>Maria Johnson</h4>
+                                <p>VIP Suite Guest</p>
+                                <div class="stars">
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="testimonial">
+                        <div class="testimonial-content">
+                            "Perfect for our family vacation! The kids loved the pool, we enjoyed the spa, and everyone raved about the restaurant. Outstanding service throughout our stay."
+                        </div>
+                        <div class="testimonial-author">
+                            <div class="author-avatar">RW</div>
+                            <div class="author-info">
+                                <h4>Robert Wilson</h4>
+                                <p>Family Suite Guest</p>
+                                <div class="stars">
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 3rem;">
+                    <a href="<?php echo isLoggedIn() ? 'booking.php' : 'login.php'; ?>" class="btn btn-primary">
+                        <i class="fas fa-calendar-check"></i> Book Your Stay
+                    </a>
+                </div>
+            </div>
+        </section>
+    </main>
 
     <!-- Footer -->
     <footer class="footer">
         <div class="container">
-            <p>&copy; <?php echo date('Y'); ?> Paradise Hotel & Resort. All rights reserved.</p>
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3><i class="fas fa-hotel"></i> Paradise Hotel & Resort</h3>
+                    <p>Experience luxury and comfort in our world-class resort with premium amenities and exceptional service.</p>
+                </div>
+                <div class="footer-section">
+                    <h3><i class="fas fa-map-marker-alt"></i> Contact Info</h3>
+                    <p><i class="fas fa-phone"></i> +1 (555) 123-4567</p>
+                    <p><i class="fas fa-envelope"></i> info@paradisehotel.com</p>
+                    <p><i class="fas fa-map-marker-alt"></i> 123 Paradise Lane, Resort City</p>
+                </div>
+                <div class="footer-section">
+                    <h3><i class="fas fa-clock"></i> Quick Links</h3>
+                    <p><a href="#pool">Swimming Pool</a></p>
+                    <p><a href="#spa">Spa & Wellness</a></p>
+                    <p><a href="#restaurant">Fine Dining</a></p>
+                    <p><a href="<?php echo isLoggedIn() ? 'booking.php' : 'login.php'; ?>">Book Now</a></p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; <?php echo date('Y'); ?> Paradise Hotel & Resort. All rights reserved.</p>
+            </div>
         </div>
     </footer>
 
-    <script src="assets/js/script.js"></script>
-    <!-- Availability modal -->
-    <div id="availabilityModal" class="modal" style="display:none;">
-        <div class="modal-backdrop"></div>
-        <div class="modal-dialog">
-            <div class="modal-header">
-                <h3><i class="fas fa-calendar-alt"></i> Availability</h3>
-                <button type="button" class="modal-close" id="availabilityClose">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.75rem;">
-                    <label style="min-width:80px">Room</label>
-                    <select id="availRoom">
-                        <option value="Regular">Regular</option>
-                        <option value="Deluxe">Deluxe</option>
-                        <option value="VIP">VIP</option>
-                    </select>
-                    <label style="min-width:60px;margin-left:0.5rem;">Pax</label>
-                    <select id="availPax">
-                        <option value="2">2</option>
-                        <option value="8">8</option>
-                        <option value="20">20</option>
-                    </select>
-                    <button id="availLoad" class="btn-primary" style="margin-left:auto;">Load</button>
-                </div>
-                <div id="calendarContainer"></div>
-            </div>
-        </div>
-    </div>
-    <script>
-        // Expose login state for JS
-        window.isLoggedIn = <?php echo isLoggedIn() ? 'true' : 'false'; ?>;
-    </script>
+    <script src="assets/js/main.js"></script>
 </body>
 </html>
