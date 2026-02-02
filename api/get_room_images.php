@@ -1,29 +1,30 @@
 <?php
-require_once '../config/database.php';
-
 header('Content-Type: application/json');
+require_once '../includes/photo_functions.php';
 
-$roomType = $_GET['room_type'] ?? '';
+$section = $_GET['section'] ?? '';
+$limit = isset($_GET['limit']) ? intval($_GET['limit']) : null;
 
-if (empty($roomType)) {
-    echo json_encode(['error' => 'Room type is required']);
+if (empty($section)) {
+    echo json_encode([
+        'success' => false,
+        'error' => 'Section parameter is required'
+    ]);
     exit();
 }
 
-$conn = getDBConnection();
-$stmt = $conn->prepare("SELECT image_path FROM room_images WHERE room_type = ? ORDER BY display_order ASC");
-$stmt->bind_param("s", $roomType);
-$stmt->execute();
-$result = $stmt->get_result();
-
-$images = [];
-while ($row = $result->fetch_assoc()) {
-    $images[] = $row['image_path'];
+try {
+    $photos = getPhotosWithFallback($section, $limit);
+    
+    echo json_encode([
+        'success' => true,
+        'photos' => $photos
+    ]);
+    
+} catch (Exception $e) {
+    echo json_encode([
+        'success' => false,
+        'error' => 'Failed to fetch images'
+    ]);
 }
-
-$stmt->close();
-$conn->close();
-
-echo json_encode(['images' => $images]);
 ?>
-
